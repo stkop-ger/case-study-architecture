@@ -29,7 +29,19 @@ export class UserController extends BaseController {
                 updatedAt: user.updatedAt,
             });
         } catch (error: any) {
-            return res.status(400).json({ error: error.message });
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
+        }
+    }
+
+    @httpPost('/login')
+    async login(@request() req: Request, @response() res: Response) {
+        try {
+            const result = await this.userService.loginUser(req.body);
+            return res.status(200).json(result);
+        } catch (error: any) {
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
         }
     }
 }

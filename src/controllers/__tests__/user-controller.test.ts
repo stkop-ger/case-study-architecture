@@ -3,6 +3,7 @@ import { json } from 'body-parser';
 import { Container } from 'inversify';
 import { InversifyExpressServer } from 'inversify-express-utils';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
 
 import { TYPES } from '../../lib';
 import { UserServiceImpl } from '../../services/user-service';
@@ -313,5 +314,93 @@ describe('POST /partner-app/api/users/register', () => {
         });
         expect(userRepository.createUser).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
+    });
+});
+
+describe('POST /partner-app/api/users/login', () => {
+    beforeEach(() => {
+        process.env.JWT_SECRET = 'test-secret';
+        process.env.JWT_EXPIRES_IN = '1h';
+    });
+
+    it('returns a JWT token for valid credentials', async () => {
+        const createdUser = {
+            id: 'user-1',
+            email: 'jane@example.com',
+            password: 'salt.hash',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            createdAt: new Date('2026-02-08T10:00:00Z'),
+            updatedAt: new Date('2026-02-08T10:00:00Z'),
+        };
+
+        const { app, userRepository, passwordManager } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn().mockResolvedValue(createdUser),
+                createUser: jest.fn(),
+            } as unknown as UserRepository,
+            passwordManager: {
+                toHash: jest.fn(),
+                compare: jest.fn().mockResolvedValue(true),
+            } as unknown as PasswordManagerService,
+        });
+
+        const response = await request(app)
+            .post('/partner-app/api/users/login')
+            .send({ email: 'jane@example.com', password: 'Password1' });
+
+        expect(response.status).toBe(200);
+        expect(response.body.token).toBeDefined();
+
+        const decoded = jwt.verify(response.body.token, 'test-secret') as {
+            sub: string;
+            email: string;
+        };
+
+        expect(decoded.sub).toBe('user-1');
+        expect(decoded.email).toBe('jane@example.com');
+        expect(userRepository.findByEmail).toHaveBeenCalledWith('jane@example.com');
+        expect(passwordManager.compare).toHaveBeenCalledWith(
+            'salt.hash',
+            'Password1',
+        );
+    });
+
+    it('rejects invalid credentials', async () => {
+        const { app } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn().mockResolvedValue(null),
+                createUser: jest.fn(),
+            } as unknown as UserRepository,
+        });
+
+        const response = await request(app)
+            .post('/partner-app/api/users/login')
+            .send({ email: 'jane@example.com', password: 'Password1' });
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ error: 'invalid credentials' });
+    });
+
+    it('rejects missing email', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .post('/partner-app/api/users/login')
+            .send({ password: 'Password1' });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'email is required' });
+    });
+
+    it('rejects missing password', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .post('/partner-app/api/users/login')
+            .send({ email: 'jane@example.com' });
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({ error: 'password is required' });
     });
 });

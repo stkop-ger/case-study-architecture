@@ -4,6 +4,7 @@ import { User } from '../entities';
 import { TYPES } from '../lib';
 import { UserRepository } from '../repositories/user-repository';
 import { PasswordManagerService } from './password-manager-service';
+import jwt, { SignOptions } from 'jsonwebtoken';
 
 export interface RegisterUserInput {
     email: string;
@@ -12,8 +13,18 @@ export interface RegisterUserInput {
     lastName: string;
 }
 
+export interface LoginUserInput {
+    email: string;
+    password: string;
+}
+
+export interface LoginResult {
+    token: string;
+}
+
 export interface UserService {
     registerUser(input: RegisterUserInput): Promise<User>;
+    loginUser(input: LoginUserInput): Promise<LoginResult>;
 }
 
 const MAX_LENGTH = 50;
@@ -53,6 +64,15 @@ const ensureLengthLimit = (value: string, field: string, maxLength = MAX_LENGTH)
     }
 };
 
+class AuthError extends Error {
+    readonly statusCode: number;
+
+    constructor(message: string, statusCode: number) {
+        super(message);
+        this.statusCode = statusCode;
+    }
+}
+
 @injectable()
 export class UserServiceImpl implements UserService {
     constructor(
@@ -60,6 +80,22 @@ export class UserServiceImpl implements UserService {
         @inject(TYPES.PasswordManagerService)
         private passwordManager: PasswordManagerService,
     ) {}
+
+    private buildJwt(user: User): string {
+        const secret = process.env.JWT_SECRET;
+        if (!secret) {
+            throw new AuthError('JWT secret is not configured', 500);
+        }
+        const expiresIn = (process.env.JWT_EXPIRES_IN || '24h') as SignOptions['expiresIn'];
+        return jwt.sign(
+            {
+                sub: user.id,
+                email: user.email,
+            },
+            secret,
+            { expiresIn },
+        );
+    }
 
     async registerUser(input: RegisterUserInput): Promise<User> {
         const email = input.email?.trim();
@@ -105,5 +141,32 @@ export class UserServiceImpl implements UserService {
             firstName,
             lastName,
         });
+    }
+
+    async loginUser(input: LoginUserInput): Promise<LoginResult> {
+        const email = input.email?.trim();
+        const password = input.password ?? '';
+
+        ensureRequired(email, 'email');
+        ensureRequired(password, 'password');
+
+        if (!isValidEmail(email)) {
+            throw new Error('email is invalid');
+        }
+
+        const user = await this.userRepository.findByEmail(email);
+        if (!user) {
+            throw new AuthError('invalid credentials', 401);
+        }
+
+        const isMatch = await this.passwordManager.compare(
+            user.password,
+            password,
+        );
+        if (!isMatch) {
+            throw new AuthError('invalid credentials', 401);
+        }
+
+        return { token: this.buildJwt(user) };
     }
 }
