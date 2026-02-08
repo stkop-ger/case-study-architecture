@@ -7,16 +7,16 @@ export class User extends AbstractEntity {
     @PrimaryGeneratedColumn('uuid')
     id!: string;
 
-    @Column({ type: 'varchar' })
+    @Column({ type: 'varchar', length: 50 })
     email!: string;
 
-    @Column({ type: 'varchar' })
+    @Column({ type: 'varchar', length: 50 })
     password!: string;
 
-    @Column({ type: 'varchar' })
+    @Column({ type: 'varchar', length: 50 })
     firstName!: string;
 
-    @Column({ type: 'varchar' })
+    @Column({ type: 'varchar', length: 50 })
     lastName!: string;
 
     @Column({ name: 'email_confirmed_at', type: 'timestamp', nullable: true })

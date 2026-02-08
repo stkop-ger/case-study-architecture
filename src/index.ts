@@ -6,7 +6,7 @@ import { InversifyExpressServer } from 'inversify-express-utils';
 
 // import { createKafkaClient, Producer, Consumer } from '@marta/eventbus/dist';
 
-// import { getDataSource } from './typeormconfig';
+// import { getDataSource } from './repositories/typeormconfig';
 
 import { diContainer } from '../inversify.config';
 // import { TYPES } from './lib';

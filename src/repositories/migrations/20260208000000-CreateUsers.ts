@@ -19,21 +19,25 @@ export class CreateUsers20260208000000 implements MigrationInterface {
                     {
                         name: 'email',
                         type: 'varchar',
+                        length: '50',
                         isNullable: false,
                     },
                     {
                         name: 'password',
                         type: 'varchar',
+                        length: '50',
                         isNullable: false,
                     },
                     {
                         name: 'firstName',
                         type: 'varchar',
+                        length: '50',
                         isNullable: false,
                     },
                     {
                         name: 'lastName',
                         type: 'varchar',
+                        length: '50',
                         isNullable: false,
                     },
                     {
