@@ -3,6 +3,7 @@ import { injectable, inject } from 'inversify';
 import { User } from '../entities';
 import { TYPES } from '../lib';
 import { UserRepository } from '../repositories/user-repository';
+import { PasswordManagerService } from './password-manager-service';
 
 export interface RegisterUserInput {
     email: string;
@@ -16,6 +17,7 @@ export interface UserService {
 }
 
 const MAX_LENGTH = 50;
+const PASSWORD_HASH_MAX_LENGTH = 255;
 
 const isValidEmail = (email: string) => {
     const trimmed = email.trim();
@@ -45,9 +47,9 @@ const ensureRequired = (value: string, field: string) => {
     }
 };
 
-const ensureLengthLimit = (value: string, field: string) => {
-    if (value.length > MAX_LENGTH) {
-        throw new Error(`${field} must be ${MAX_LENGTH} characters or fewer`);
+const ensureLengthLimit = (value: string, field: string, maxLength = MAX_LENGTH) => {
+    if (value.length > maxLength) {
+        throw new Error(`${field} must be ${maxLength} characters or fewer`);
     }
 };
 
@@ -55,6 +57,8 @@ const ensureLengthLimit = (value: string, field: string) => {
 export class UserServiceImpl implements UserService {
     constructor(
         @inject(TYPES.UserRepository) private userRepository: UserRepository,
+        @inject(TYPES.PasswordManagerService)
+        private passwordManager: PasswordManagerService,
     ) {}
 
     async registerUser(input: RegisterUserInput): Promise<User> {
@@ -88,9 +92,16 @@ export class UserServiceImpl implements UserService {
             throw new Error('email already exists');
         }
 
+        const hashedPassword = await this.passwordManager.toHash(password);
+        ensureLengthLimit(
+            hashedPassword,
+            'password',
+            PASSWORD_HASH_MAX_LENGTH,
+        );
+
         return await this.userRepository.createUser({
             email,
-            password,
+            password: hashedPassword,
             firstName,
             lastName,
         });
