@@ -1,2 +1,2 @@
 export * from './abstract-entity';
-// export * from './user';
+export * from './user';

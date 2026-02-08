@@ -12,6 +12,8 @@
     "dev": "concurrently npm:dev:*",
     "build": "rimraf ./dist && tsc",
     "start": "node ./dist/src/index.js",
+    "migration:up": "npm run build && node ./node_modules/typeorm/cli.js migration:run -d dist/src/entities/typeormconfig.js",
+    "migration:down": "npm run build && node ./node_modules/typeorm/cli.js migration:revert -d dist/src/entities/typeormconfig.js",
     "test": "jest -c ./jest.config.json",
     "test:watch": "jest -c ./jest.config.json --watchAll=true"
   },
