@@ -6,10 +6,10 @@ import { InversifyExpressServer } from 'inversify-express-utils';
 
 // import { createKafkaClient, Producer, Consumer } from '@marta/eventbus/dist';
 
-// import { getDataSource } from './repositories/typeormconfig';
+import { getDataSource } from './repositories/typeormconfig';
 
 import { diContainer } from '../inversify.config';
-// import { TYPES } from './lib';
+import { TYPES } from './lib';
 // import { exampleEventHandler } from './events/handlers';
 
 dotenv.config();
@@ -30,9 +30,9 @@ dotenv.config();
         // diContainer.bind(TYPES.producer).toConstantValue(producer);
 
         // DB setup
-        // const dataSource = await getDataSource();
-        // await dataSource.initialize();
-        // diContainer.bind(TYPES.DB).toConstantValue(dataSource);
+        const dataSource = await getDataSource();
+        await dataSource.initialize();
+        diContainer.bind(TYPES.DB).toConstantValue(dataSource);
 
         // Create app server
         const app = new InversifyExpressServer(diContainer, null, {
