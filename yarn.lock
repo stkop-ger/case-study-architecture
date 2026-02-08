@@ -758,65 +758,6 @@
   resolved "https://registry.npmjs.org/@humanwhocodes/object-schema/-/object-schema-2.0.3.tgz"
   integrity sha512-93zYdMES/c1D69yZiKDBj0V24vqNzB/koF26KPaagAfd3P/4gUlh3Dys5ogAK+Exi9QyzlD8x/08Zt7wIKcDcA==
 
-"@inversifyjs/common@1.4.0":
-  version "1.4.0"
-  resolved "https://registry.npmjs.org/@inversifyjs/common/-/common-1.4.0.tgz"
-  integrity sha512-qfRJ/3iOlCL/VfJq8+4o5X4oA14cZSBbpAmHsYj8EsIit1xDndoOl0xKOyglKtQD4u4gdNVxMHx4RWARk/I4QA==
-
-"@inversifyjs/common@1.5.2":
-  version "1.5.2"
-  resolved "https://registry.npmjs.org/@inversifyjs/common/-/common-1.5.2.tgz"
-  integrity sha512-WlzR9xGadABS9gtgZQ+luoZ8V6qm4Ii6RQfcfC9Ho2SOlE6ZuemFo7PKJvKI0ikm8cmKbU8hw5UK6E4qovH21w==
-
-"@inversifyjs/container@1.15.0":
-  version "1.15.0"
-  resolved "https://registry.npmjs.org/@inversifyjs/container/-/container-1.15.0.tgz"
-  integrity sha512-U2xYsPrJTz5za2TExi5lg8qOWf8TEVBpN+pQM7B8BVA2rajtbRE9A66SLRHk8c1eGXmg+0K4Hdki6tWAsSQBUA==
-  dependencies:
-    "@inversifyjs/common" "1.5.2"
-    "@inversifyjs/core" "9.2.0"
-    "@inversifyjs/plugin" "0.2.0"
-    "@inversifyjs/reflect-metadata-utils" "1.4.1"
-
-"@inversifyjs/core@1.3.5":
-  version "1.3.5"
-  resolved "https://registry.npmjs.org/@inversifyjs/core/-/core-1.3.5.tgz"
-  integrity sha512-B4MFXabhNTAmrfgB+yeD6wd/GIvmvWC6IQ8Rh/j2C3Ix69kmqwz9pr8Jt3E+Nho9aEHOQCZaGmrALgtqRd+oEQ==
-  dependencies:
-    "@inversifyjs/common" "1.4.0"
-    "@inversifyjs/reflect-metadata-utils" "0.2.4"
-
-"@inversifyjs/core@9.2.0":
-  version "9.2.0"
-  resolved "https://registry.npmjs.org/@inversifyjs/core/-/core-9.2.0.tgz"
-  integrity sha512-Nm7BR6KmpgshIHpVQWuEDehqRVb6GBm8LFEuhc2s4kSZWrArZ15RmXQzROLk4m+hkj4kMXgvMm5Qbopot/D6Sg==
-  dependencies:
-    "@inversifyjs/common" "1.5.2"
-    "@inversifyjs/prototype-utils" "0.1.3"
-    "@inversifyjs/reflect-metadata-utils" "1.4.1"
-
-"@inversifyjs/plugin@0.2.0":
-  version "0.2.0"
-  resolved "https://registry.npmjs.org/@inversifyjs/plugin/-/plugin-0.2.0.tgz"
-  integrity sha512-R/JAdkTSD819pV1zi0HP54mWHyX+H2m8SxldXRgPQarS3ySV4KPyRdosWcfB8Se0JJZWZLHYiUNiS6JvMWSPjw==
-
-"@inversifyjs/prototype-utils@0.1.3":
-  version "0.1.3"
-  resolved "https://registry.npmjs.org/@inversifyjs/prototype-utils/-/prototype-utils-0.1.3.tgz"
-  integrity sha512-EzRamZzNgE9Sn3QtZ8NncNa2lpPMZfspqbK6BWFguWnOpK8ymp2TUuH46ruFHZhrHKnknPd7fG22ZV7iF517TQ==
-  dependencies:
-    "@inversifyjs/common" "1.5.2"
-
-"@inversifyjs/reflect-metadata-utils@0.2.4":
-  version "0.2.4"
-  resolved "https://registry.npmjs.org/@inversifyjs/reflect-metadata-utils/-/reflect-metadata-utils-0.2.4.tgz"
-  integrity sha512-u95rV3lKfG+NT2Uy/5vNzoDujos8vN8O18SSA5UyhxsGYd4GLQn/eUsGXfOsfa7m34eKrDelTKRUX1m/BcNX5w==
-
-"@inversifyjs/reflect-metadata-utils@1.4.1":
-  version "1.4.1"
-  resolved "https://registry.npmjs.org/@inversifyjs/reflect-metadata-utils/-/reflect-metadata-utils-1.4.1.tgz"
-  integrity sha512-Cp77C4d2wLaHXiUB7iH6Cxb7i1lD/YDuTIHLTDzKINqGSz0DCSoL/Dg2wVkW/6Qx03r/yQMLJ+32Agl32N2X8g==
-
 "@isaacs/balanced-match@^4.0.1":
   version "4.0.1"
   resolved "https://registry.npmjs.org/@isaacs/balanced-match/-/balanced-match-4.0.1.tgz"
@@ -3403,22 +3344,10 @@ inversify-express-utils@^6.4.0:
     http-status-codes "^2.1.4"
     inversify "^6.0.1"
 
-inversify@^6.0.1:
-  version "6.2.2"
-  resolved "https://registry.npmjs.org/inversify/-/inversify-6.2.2.tgz"
-  integrity sha512-KB836KHbZ9WrUnB8ax5MtadOwnqQYa+ZJO3KWbPFgcr4RIEnHM621VaqFZzOZd9+U7ln6upt9n0wJei7x2BNqw==
-  dependencies:
-    "@inversifyjs/common" "1.4.0"
-    "@inversifyjs/core" "1.3.5"
-
-inversify@^7.11.0:
-  version "7.11.0"
-  resolved "https://registry.npmjs.org/inversify/-/inversify-7.11.0.tgz"
-  integrity sha512-yZDprSSr8TyVeMGI/AOV4ws6gwjX22hj9Z8/oHAVpJORY6WRFTcUzhnZtibBUHEw2U8ArvHcR+i863DplQ3Cwg==
-  dependencies:
-    "@inversifyjs/common" "1.5.2"
-    "@inversifyjs/container" "1.15.0"
-    "@inversifyjs/core" "9.2.0"
+inversify@^6.0.1, inversify@6.0.1:
+  version "6.0.1"
+  resolved "https://registry.npmjs.org/inversify/-/inversify-6.0.1.tgz"
+  integrity sha512-B3ex30927698TJENHR++8FfEaJGqoWOgI6ZY5Ht/nLUsFCwHn6akbwtnUAPCgUepAnTpe2qHxhDNjoKLyz6rgQ==
 
 ipaddr.js@1.9.1:
   version "1.9.1"
@@ -4636,7 +4565,7 @@ readdirp@~3.6.0:
   dependencies:
     picomatch "^2.2.1"
 
-reflect-metadata@^0.2.2, reflect-metadata@~0.2.2, reflect-metadata@0.2.2:
+reflect-metadata@^0.2.2:
   version "0.2.2"
   resolved "https://registry.npmjs.org/reflect-metadata/-/reflect-metadata-0.2.2.tgz"
   integrity sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q==

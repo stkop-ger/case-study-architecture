@@ -4,7 +4,7 @@
         "outDir": "./dist",
         "sourceMap": true,
         "noImplicitAny": false,
-        "target": "es5",
+        "target": "es2017",
         "lib": ["es2016", "dom"],
         "module": "commonjs",
         "moduleResolution": "node",
@@ -17,7 +17,7 @@
         "strict": true,
         "experimentalDecorators": true,
         "emitDecoratorMetadata": true,
-        "types": ["reflect-metadata", "node", "@types/jest"],
+        "types": ["node"],
         "typeRoots": ["node_modules/@types", "src/@types"]
     },
     "include": ["src/**/*"],
