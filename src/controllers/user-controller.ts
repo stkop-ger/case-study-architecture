@@ -59,6 +59,31 @@ export class UserController extends BaseController {
         }
     }
 
+    @httpPost('/password-reset')
+    async requestPasswordReset(@request() req: Request, @response() res: Response) {
+        try {
+            await this.userService.requestPasswordReset(req.body);
+            return res.status(202).json({
+                message:
+                    'If the account exists, password reset instructions will be sent.',
+            });
+        } catch (error: any) {
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
+        }
+    }
+
+    @httpPost('/password-reset/confirm')
+    async confirmPasswordReset(@request() req: Request, @response() res: Response) {
+        try {
+            await this.userService.confirmPasswordReset(req.body);
+            return res.status(200).json({ message: 'password reset confirmed' });
+        } catch (error: any) {
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
+        }
+    }
+
     @httpGet('/profile', requireAuth)
     async getProfile(@request() req: Request, @response() res: Response) {
         try {

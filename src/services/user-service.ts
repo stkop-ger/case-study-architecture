@@ -37,10 +37,21 @@ export interface RefreshTokenInput {
     refreshToken: string;
 }
 
+export interface PasswordResetRequestInput {
+    email: string;
+}
+
+export interface PasswordResetConfirmInput {
+    token: string;
+    password: string;
+}
+
 export interface UserService {
     register(input: RegisterUserInput): Promise<User>;
     authenticate(input: LoginUserInput): Promise<LoginResult>;
     refresh(input: RefreshTokenInput): Promise<LoginResult>;
+    requestPasswordReset(input: PasswordResetRequestInput): Promise<void>;
+    confirmPasswordReset(input: PasswordResetConfirmInput): Promise<void>;
     getProfile(userId: string): Promise<User>;
     updateProfile(userId: string, data: UpdateProfileDto): Promise<User>;
 }
@@ -294,6 +305,39 @@ export class UserServiceImpl implements UserService {
             token: accessToken,
             refreshToken: nextRefreshToken.token,
         };
+    }
+
+    async requestPasswordReset(input: PasswordResetRequestInput): Promise<void> {
+        const email = input.email?.trim();
+        ensureRequired(email, 'email');
+
+        if (!isValidEmail(email)) {
+            throw new Error('email is invalid');
+        }
+
+        ensureLengthLimit(email, 'email');
+
+        // Endpoint structure only: do not send email or persist reset tokens yet.
+        // We intentionally do not disclose whether the user exists.
+        await this.userRepository.findByEmail(email);
+    }
+
+    async confirmPasswordReset(input: PasswordResetConfirmInput): Promise<void> {
+        const token = input.token ?? '';
+        const password = input.password ?? '';
+
+        ensureRequired(token, 'token');
+        ensureRequired(password, 'password');
+        ensureLengthLimit(token, 'token', 512);
+        ensureLengthLimit(password, 'password');
+
+        if (!isStrongPassword(password)) {
+            throw new Error(
+                'password must be at least 8 characters and include uppercase, lowercase, and a number',
+            );
+        }
+
+        // Endpoint structure only: no token verification or password update yet.
     }
 
     async getProfile(userId: string): Promise<User> {
