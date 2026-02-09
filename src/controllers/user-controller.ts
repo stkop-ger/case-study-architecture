@@ -19,7 +19,7 @@ export class UserController extends BaseController {
     @httpPost('/register')
     async register(@request() req: Request, @response() res: Response) {
         try {
-            const user = await this.userService.registerUser(req.body);
+            const user = await this.userService.register(req.body);
             return res.status(201).json({
                 id: user.id,
                 email: user.email,
@@ -37,7 +37,7 @@ export class UserController extends BaseController {
     @httpPost('/login')
     async login(@request() req: Request, @response() res: Response) {
         try {
-            const result = await this.userService.loginUser(req.body);
+            const result = await this.userService.authenticate(req.body);
             return res.status(200).json(result);
         } catch (error: any) {
             const statusCode = error?.statusCode ?? 400;

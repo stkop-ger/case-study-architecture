@@ -22,7 +22,7 @@ const buildApp = (overrides?: {
         overrides?.userRepository ??
         ({
             findByEmail: jest.fn().mockResolvedValue(null),
-            createUser: jest.fn(),
+            create: jest.fn(),
         } as unknown as UserRepository);
 
     const passwordManager: PasswordManagerService =
@@ -71,7 +71,7 @@ describe('POST /partner-app/api/users/register', () => {
         const { app, userRepository, passwordManager } = buildApp({
             userRepository: {
                 findByEmail: jest.fn().mockResolvedValue(null),
-                createUser: jest.fn().mockResolvedValue(createdUser),
+                create: jest.fn().mockResolvedValue(createdUser),
             } as unknown as UserRepository,
             passwordManager: {
                 toHash: jest.fn().mockResolvedValue('salt.hash'),
@@ -99,7 +99,7 @@ describe('POST /partner-app/api/users/register', () => {
         });
 
         expect(passwordManager.toHash).toHaveBeenCalledWith('Password1');
-        expect(userRepository.createUser).toHaveBeenCalledWith({
+        expect(userRepository.create).toHaveBeenCalledWith({
             email: 'jane@example.com',
             password: 'salt.hash',
             firstName: 'Jane',
@@ -121,7 +121,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'email is invalid' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -129,7 +129,7 @@ describe('POST /partner-app/api/users/register', () => {
         const { app, userRepository, passwordManager } = buildApp({
             userRepository: {
                 findByEmail: jest.fn().mockResolvedValue({ id: 'existing' }),
-                createUser: jest.fn(),
+                create: jest.fn(),
             } as unknown as UserRepository,
         });
 
@@ -144,7 +144,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'email already exists' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -164,7 +164,7 @@ describe('POST /partner-app/api/users/register', () => {
         expect(response.body).toEqual({
             error: 'password must be at least 8 characters and include uppercase, lowercase, and a number',
         });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -181,7 +181,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'email is required' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -198,7 +198,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'password is required' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -215,7 +215,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'firstName is required' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -232,7 +232,7 @@ describe('POST /partner-app/api/users/register', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'lastName is required' });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -252,7 +252,7 @@ describe('POST /partner-app/api/users/register', () => {
         expect(response.body).toEqual({
             error: 'email must be 50 characters or fewer',
         });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -272,7 +272,7 @@ describe('POST /partner-app/api/users/register', () => {
         expect(response.body).toEqual({
             error: 'password must be 50 characters or fewer',
         });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -292,7 +292,7 @@ describe('POST /partner-app/api/users/register', () => {
         expect(response.body).toEqual({
             error: 'firstName must be 50 characters or fewer',
         });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 
@@ -312,7 +312,7 @@ describe('POST /partner-app/api/users/register', () => {
         expect(response.body).toEqual({
             error: 'lastName must be 50 characters or fewer',
         });
-        expect(userRepository.createUser).not.toHaveBeenCalled();
+        expect(userRepository.create).not.toHaveBeenCalled();
         expect(passwordManager.toHash).not.toHaveBeenCalled();
     });
 });
@@ -337,7 +337,7 @@ describe('POST /partner-app/api/users/login', () => {
         const { app, userRepository, passwordManager } = buildApp({
             userRepository: {
                 findByEmail: jest.fn().mockResolvedValue(createdUser),
-                createUser: jest.fn(),
+                create: jest.fn(),
             } as unknown as UserRepository,
             passwordManager: {
                 toHash: jest.fn(),
@@ -370,7 +370,7 @@ describe('POST /partner-app/api/users/login', () => {
         const { app } = buildApp({
             userRepository: {
                 findByEmail: jest.fn().mockResolvedValue(null),
-                createUser: jest.fn(),
+                create: jest.fn(),
             } as unknown as UserRepository,
         });
 

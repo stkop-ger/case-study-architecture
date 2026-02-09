@@ -6,7 +6,8 @@ import { TYPES } from '../lib';
 
 export interface UserRepository {
     findByEmail(email: string): Promise<User | null>;
-    createUser(data: Pick<User, 'email' | 'password' | 'firstName' | 'lastName'>): Promise<User>;
+    findById(id: string): Promise<User | null>;
+    create(data: Pick<User, 'email' | 'password' | 'firstName' | 'lastName'>): Promise<User>;
 }
 
 @injectable()
@@ -25,7 +26,12 @@ export class UserRepositoryImpl implements UserRepository {
         return await repo.findOne({ where: { email } });
     }
 
-    async createUser(
+    async findById(id: string): Promise<User | null> {
+        const repo = await this.getRepo();
+        return await repo.findOne({ where: { id } });
+    }
+
+    async create(
         data: Pick<User, 'email' | 'password' | 'firstName' | 'lastName'>,
     ): Promise<User> {
         const repo = await this.getRepo();

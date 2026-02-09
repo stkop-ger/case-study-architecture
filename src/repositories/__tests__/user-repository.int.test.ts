@@ -57,7 +57,7 @@ describe('UserRepository integration', () => {
     });
 
     it('creates a user and persists it', async () => {
-        const created = await repository.createUser({
+        const created = await repository.create({
             email: 'jane@example.com',
             password: 'salt.hash',
             firstName: 'Jane',
@@ -78,7 +78,7 @@ describe('UserRepository integration', () => {
     });
 
     it('finds a user by email', async () => {
-        const saved = await repository.createUser({
+        const saved = await repository.create({
             email: 'john@example.com',
             password: 'salt.hash',
             firstName: 'John',
@@ -95,5 +95,19 @@ describe('UserRepository integration', () => {
         const found = await repository.findByEmail('missing@example.com');
 
         expect(found).toBeNull();
+    });
+
+    it('finds a user by id', async () => {
+        const saved = await repository.create({
+            email: 'sara@example.com',
+            password: 'salt.hash',
+            firstName: 'Sara',
+            lastName: 'Connor',
+        });
+
+        const found = await repository.findById(saved.id);
+
+        expect(found).not.toBeNull();
+        expect(found?.id).toBe(saved.id);
     });
 });

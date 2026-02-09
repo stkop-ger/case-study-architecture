@@ -23,8 +23,8 @@ export interface LoginResult {
 }
 
 export interface UserService {
-    registerUser(input: RegisterUserInput): Promise<User>;
-    loginUser(input: LoginUserInput): Promise<LoginResult>;
+    register(input: RegisterUserInput): Promise<User>;
+    authenticate(input: LoginUserInput): Promise<LoginResult>;
 }
 
 const MAX_LENGTH = 50;
@@ -97,7 +97,7 @@ export class UserServiceImpl implements UserService {
         );
     }
 
-    async registerUser(input: RegisterUserInput): Promise<User> {
+    async register(input: RegisterUserInput): Promise<User> {
         const email = input.email?.trim();
         const password = input.password ?? '';
         const firstName = input.firstName?.trim();
@@ -135,7 +135,7 @@ export class UserServiceImpl implements UserService {
             PASSWORD_HASH_MAX_LENGTH,
         );
 
-        return await this.userRepository.createUser({
+        return await this.userRepository.create({
             email,
             password: hashedPassword,
             firstName,
@@ -143,7 +143,7 @@ export class UserServiceImpl implements UserService {
         });
     }
 
-    async loginUser(input: LoginUserInput): Promise<LoginResult> {
+    async authenticate(input: LoginUserInput): Promise<LoginResult> {
         const email = input.email?.trim();
         const password = input.password ?? '';
 
