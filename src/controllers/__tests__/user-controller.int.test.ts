@@ -18,6 +18,7 @@ import {
     InMemoryRefreshTokenRepository,
 } from '../../repositories/refresh-token-repository';
 import { User } from '../../entities';
+import { createClient } from 'redis';
 
 dotenv.config();
 
@@ -63,12 +64,23 @@ describe('UserController end-to-end', () => {
 
     let dataSource: DataSource;
     let app: ReturnType<InversifyExpressServer['build']>;
+    let redisClient: ReturnType<typeof createClient>;
 
     beforeAll(async () => {
         dataSource = await buildTestDataSource();
+        const redisUrl =
+            process.env.TEST_REDIS_URL ??
+            process.env.REDIS_URL ??
+            `redis://${process.env.REDIS_HOST ?? 'localhost'}:${process.env.REDIS_PORT ?? '6379'}`;
+        redisClient = createClient({ url: redisUrl });
+        redisClient.on('error', err => {
+            console.error('Redis client error', err);
+        });
+        await redisClient.connect();
 
         const container = new Container();
         container.bind(TYPES.DB).toConstantValue(dataSource);
+        container.bind(TYPES.RedisClient).toConstantValue(redisClient);
         container.bind(TYPES.UserRepository).to(UserRepositoryImpl);
         container
             .bind(TYPES.PasswordManagerService)
@@ -109,6 +121,9 @@ describe('UserController end-to-end', () => {
     afterAll(async () => {
         if (dataSource?.isInitialized) {
             await dataSource.destroy();
+        }
+        if (redisClient) {
+            await redisClient.quit();
         }
     });
 

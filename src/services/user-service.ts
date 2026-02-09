@@ -9,6 +9,7 @@ import {
 import { PasswordManagerService } from './password-manager-service';
 import jwt, { SignOptions } from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
+import type { RedisClientType } from 'redis';
 
 export interface RegisterUserInput {
     email: string;
@@ -46,6 +47,9 @@ export interface UserService {
 
 const MAX_LENGTH = 50;
 const PASSWORD_HASH_MAX_LENGTH = 255;
+const DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
+const DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
+const LOGIN_RATE_LIMIT_KEY_PREFIX = 'login:attempts:';
 
 const isValidEmail = (email: string) => {
     const trimmed = email.trim();
@@ -107,6 +111,7 @@ export class UserServiceImpl implements UserService {
         private passwordManager: PasswordManagerService,
         @inject(TYPES.RefreshTokenRepository)
         private refreshTokenRepository: RefreshTokenRepository,
+        @inject(TYPES.RedisClient) private redis: RedisClientType,
     ) {}
 
     private buildJwt(user: User): string {
@@ -209,8 +214,11 @@ export class UserServiceImpl implements UserService {
             throw new Error('email is invalid');
         }
 
+        await this.assertLoginAttemptAllowed(email);
+
         const user = await this.userRepository.findByEmail(email);
         if (!user) {
+            await this.recordFailedLoginAttempt(email);
             throw new AuthError('invalid credentials', 401);
         }
 
@@ -219,8 +227,11 @@ export class UserServiceImpl implements UserService {
             password,
         );
         if (!isMatch) {
+            await this.recordFailedLoginAttempt(email);
             throw new AuthError('invalid credentials', 401);
         }
+
+        await this.clearLoginAttempts(email);
 
         const accessToken = this.buildJwt(user);
         const refreshToken = this.buildRefreshToken(user);
@@ -326,6 +337,84 @@ export class UserServiceImpl implements UserService {
         }
 
         return updated;
+    }
+
+    private getLoginRateLimitConfig(): {
+        maxAttempts: number;
+        windowSeconds: number;
+    } {
+        const maxAttempts = Number(
+            process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS ??
+                DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+        );
+        const windowSeconds = Number(
+            process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS ??
+                DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        );
+
+        return {
+            maxAttempts: Number.isFinite(maxAttempts)
+                ? maxAttempts
+                : DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
+            windowSeconds: Number.isFinite(windowSeconds)
+                ? windowSeconds
+                : DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
+        };
+    }
+
+    private buildLoginRateLimitKey(email: string): string {
+        return `${LOGIN_RATE_LIMIT_KEY_PREFIX}${email.toLowerCase()}`;
+    }
+
+    private async assertLoginAttemptAllowed(email: string): Promise<void> {
+        const { maxAttempts } = this.getLoginRateLimitConfig();
+        if (maxAttempts <= 0) {
+            return;
+        }
+
+        const key = this.buildLoginRateLimitKey(email);
+        try {
+            const current = await this.redis.get(key);
+            const attempts = current ? Number(current) : 0;
+            if (Number.isFinite(attempts) && attempts >= maxAttempts) {
+                throw new AuthError('too many login attempts', 429);
+            }
+        } catch (error) {
+            if (error instanceof AuthError) {
+                throw error;
+            }
+        }
+    }
+
+    private async recordFailedLoginAttempt(email: string): Promise<void> {
+        const { maxAttempts, windowSeconds } = this.getLoginRateLimitConfig();
+        if (maxAttempts <= 0 || windowSeconds <= 0) {
+            return;
+        }
+
+        const key = this.buildLoginRateLimitKey(email);
+        try {
+            const attempts = await this.redis.incr(key);
+            if (attempts === 1) {
+                await this.redis.expire(key, windowSeconds);
+            }
+            if (attempts >= maxAttempts) {
+                throw new AuthError('too many login attempts', 429);
+            }
+        } catch (error) {
+            if (error instanceof AuthError) {
+                throw error;
+            }
+        }
+    }
+
+    private async clearLoginAttempts(email: string): Promise<void> {
+        const key = this.buildLoginRateLimitKey(email);
+        try {
+            await this.redis.del(key);
+        } catch {
+            // Best effort: do not block login on Redis errors.
+        }
     }
 }
 

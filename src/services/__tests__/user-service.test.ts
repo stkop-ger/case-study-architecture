@@ -8,11 +8,13 @@ import {
     InMemoryRefreshTokenRepository,
     RefreshTokenRepository,
 } from '../../repositories/refresh-token-repository';
+import type { RedisClientType } from 'redis';
 
 const buildService = (overrides?: {
     userRepository?: UserRepository;
     passwordManager?: PasswordManagerService;
     refreshTokenRepository?: RefreshTokenRepository;
+    redisClient?: RedisClientType;
 }) => {
     const userRepository: UserRepository =
         overrides?.userRepository ??
@@ -34,16 +36,49 @@ const buildService = (overrides?: {
         overrides?.refreshTokenRepository ??
         (new InMemoryRefreshTokenRepository() as RefreshTokenRepository);
 
+    const redisClient: RedisClientType =
+        overrides?.redisClient ??
+        ({
+            get: jest.fn().mockResolvedValue(null),
+            incr: jest.fn().mockResolvedValue(1),
+            expire: jest.fn().mockResolvedValue(1),
+            del: jest.fn().mockResolvedValue(1),
+        } as unknown as RedisClientType);
+
     return {
         service: new UserServiceImpl(
             userRepository,
             passwordManager,
             refreshTokenRepository,
+            redisClient,
         ),
         userRepository,
         passwordManager,
         refreshTokenRepository,
+        redisClient,
     };
+};
+
+const createRedisMock = () => {
+    const store = new Map<string, number>();
+    const client = {
+        get: jest.fn(async (key: string) => {
+            const value = store.get(key);
+            return value === undefined ? null : String(value);
+        }),
+        incr: jest.fn(async (key: string) => {
+            const next = (store.get(key) ?? 0) + 1;
+            store.set(key, next);
+            return next;
+        }),
+        expire: jest.fn(async () => 1),
+        del: jest.fn(async (key: string) => {
+            store.delete(key);
+            return 1;
+        }),
+    };
+
+    return { client: client as unknown as RedisClientType, store };
 };
 
 describe('UserService', () => {
@@ -223,6 +258,75 @@ describe('UserService', () => {
             );
 
             signSpy.mockRestore();
+        });
+
+        it('rate limits when too many failures occur', async () => {
+            process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS = '2';
+            process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = '900';
+
+            const { client } = createRedisMock();
+            const { service } = buildService({
+                userRepository: {
+                    findByEmail: jest.fn().mockResolvedValue({
+                        id: 'user-1',
+                        email: 'jane@example.com',
+                        password: 'hashed',
+                    }),
+                } as unknown as UserRepository,
+                passwordManager: {
+                    compare: jest.fn().mockResolvedValue(false),
+                    toHash: jest.fn(),
+                } as unknown as PasswordManagerService,
+                redisClient: client,
+            });
+
+            await expect(
+                service.authenticate({
+                    email: 'jane@example.com',
+                    password: 'Password1',
+                }),
+            ).rejects.toThrow('invalid credentials');
+
+            await expect(
+                service.authenticate({
+                    email: 'jane@example.com',
+                    password: 'Password1',
+                }),
+            ).rejects.toThrow('too many login attempts');
+
+            delete process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
+            delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
+        });
+
+        it('clears rate limit counters after a successful login', async () => {
+            process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS = '5';
+            process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS = '900';
+
+            const { client, store } = createRedisMock();
+            const { service } = buildService({
+                userRepository: {
+                    findByEmail: jest.fn().mockResolvedValue({
+                        id: 'user-1',
+                        email: 'jane@example.com',
+                        password: 'hashed',
+                    }),
+                } as unknown as UserRepository,
+                passwordManager: {
+                    compare: jest.fn().mockResolvedValue(true),
+                    toHash: jest.fn(),
+                } as unknown as PasswordManagerService,
+                redisClient: client,
+            });
+
+            await service.authenticate({
+                email: 'jane@example.com',
+                password: 'Password1',
+            });
+
+            expect(store.size).toBe(0);
+
+            delete process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS;
+            delete process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS;
         });
 
         it('rejects when JWT secret is missing', async () => {
