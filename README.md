@@ -199,12 +199,16 @@ Your submission will be evaluated based on:
 
 These are optional but will be considered favorably:
 
-- [ ] Implement refresh token mechanism
-- [ ] Add rate limiting for login attempts
-- [ ] Implement password reset flow (endpoint structure only)
+- [x] Implement refresh token mechanism
+- [x] Add rate limiting for login attempts
+- [x] Implement password reset flow (endpoint structure only)
 - [ ] Add request validation using class-validator
-- [ ] Docker Compose setup for local development
-- [ ] API documentation with Swagger/OpenAPI
+- [x] Docker Compose setup for local development
+- [x] API documentation with Swagger/OpenAPI
+
+## 📘 API Documentation
+
+Swagger/OpenAPI spec is available at `docs/openapi.yaml`.
 
 ---
 
