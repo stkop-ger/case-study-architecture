@@ -1,7 +1,10 @@
-import { Column, Entity, PrimaryGeneratedColumn } from 'typeorm';
+import { Column, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
 
 import { AbstractEntity } from './abstract-entity';
 
+@Index('IDX_USERS_EMAIL_UNIQUE', ['email'], { unique: true })
+@Index('IDX_USERS_FIRST_NAME', ['firstName'])
+@Index('IDX_USERS_LAST_NAME', ['lastName'])
 @Entity({ name: 'users' })
 export class User extends AbstractEntity {
     @PrimaryGeneratedColumn('uuid')
