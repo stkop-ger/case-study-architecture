@@ -1,6 +1,7 @@
 export const TYPES = {
     DB: Symbol.for('DB'),
     producer: Symbol.for('producer'),
+    RedisClient: Symbol.for('RedisClient'),
 
     // Services
     ExampleService: Symbol.for('ExampleService'),
@@ -9,4 +10,5 @@ export const TYPES = {
 
     // Repositories
     UserRepository: Symbol.for('UserRepository'),
+    RefreshTokenRepository: Symbol.for('RefreshTokenRepository'),
 };

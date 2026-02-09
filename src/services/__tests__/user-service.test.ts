@@ -4,10 +4,15 @@ import jwt from 'jsonwebtoken';
 import { UserServiceImpl } from '../user-service';
 import { UserRepository } from '../../repositories/user-repository';
 import { PasswordManagerService } from '../password-manager-service';
+import {
+    InMemoryRefreshTokenRepository,
+    RefreshTokenRepository,
+} from '../../repositories/refresh-token-repository';
 
 const buildService = (overrides?: {
     userRepository?: UserRepository;
     passwordManager?: PasswordManagerService;
+    refreshTokenRepository?: RefreshTokenRepository;
 }) => {
     const userRepository: UserRepository =
         overrides?.userRepository ??
@@ -25,25 +30,40 @@ const buildService = (overrides?: {
             compare: jest.fn(),
         } as unknown as PasswordManagerService);
 
+    const refreshTokenRepository: RefreshTokenRepository =
+        overrides?.refreshTokenRepository ??
+        (new InMemoryRefreshTokenRepository() as RefreshTokenRepository);
+
     return {
-        service: new UserServiceImpl(userRepository, passwordManager),
+        service: new UserServiceImpl(
+            userRepository,
+            passwordManager,
+            refreshTokenRepository,
+        ),
         userRepository,
         passwordManager,
+        refreshTokenRepository,
     };
 };
 
 describe('UserService', () => {
     const originalJwtSecret = process.env.JWT_SECRET;
     const originalJwtExpires = process.env.JWT_EXPIRES_IN;
+    const originalJwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+    const originalJwtRefreshExpires = process.env.JWT_REFRESH_EXPIRES_IN;
 
     beforeEach(() => {
         process.env.JWT_SECRET = 'test-secret';
         process.env.JWT_EXPIRES_IN = '15m';
+        process.env.JWT_REFRESH_SECRET = 'refresh-secret';
+        process.env.JWT_REFRESH_EXPIRES_IN = '7d';
     });
 
     afterEach(() => {
         process.env.JWT_SECRET = originalJwtSecret;
         process.env.JWT_EXPIRES_IN = originalJwtExpires;
+        process.env.JWT_REFRESH_SECRET = originalJwtRefreshSecret;
+        process.env.JWT_REFRESH_EXPIRES_IN = originalJwtRefreshExpires;
     });
 
     describe('register', () => {
@@ -174,18 +194,32 @@ describe('UserService', () => {
 
             const signSpy = jest
                 .spyOn(jwt as unknown as { sign: (...args: unknown[]) => string }, 'sign')
-                .mockReturnValue('signed-token');
+                .mockReturnValueOnce('signed-token')
+                .mockReturnValueOnce('signed-refresh-token');
 
             const result = await service.authenticate({
                 email: 'jane@example.com',
                 password: 'Password1',
             });
 
-            expect(result).toEqual({ token: 'signed-token' });
+            expect(result).toEqual({
+                token: 'signed-token',
+                refreshToken: 'signed-refresh-token',
+            });
             expect(signSpy).toHaveBeenCalledWith(
                 { sub: 'user-1', email: 'jane@example.com' },
                 'test-secret',
                 { expiresIn: '15m' },
+            );
+            expect(signSpy).toHaveBeenCalledWith(
+                {
+                    sub: 'user-1',
+                    email: 'jane@example.com',
+                    type: 'refresh',
+                    jti: expect.any(String),
+                },
+                'refresh-secret',
+                { expiresIn: '7d' },
             );
 
             signSpy.mockRestore();
@@ -217,6 +251,38 @@ describe('UserService', () => {
             } catch (err) {
                 const error = err as { message?: string; statusCode?: number };
                 expect(error.message).toBe('JWT secret is not configured');
+                expect(error.statusCode).toBe(500);
+            }
+        });
+
+        it('rejects when refresh secret is missing', async () => {
+            process.env.JWT_REFRESH_SECRET = '';
+
+            const { service } = buildService({
+                userRepository: {
+                    findByEmail: jest.fn().mockResolvedValue({
+                        id: 'user-1',
+                        email: 'jane@example.com',
+                        password: 'hashed',
+                    }),
+                } as unknown as UserRepository,
+                passwordManager: {
+                    compare: jest.fn().mockResolvedValue(true),
+                    toHash: jest.fn(),
+                } as unknown as PasswordManagerService,
+            });
+
+            try {
+                await service.authenticate({
+                    email: 'jane@example.com',
+                    password: 'Password1',
+                });
+                throw new Error('Expected authenticate to throw');
+            } catch (err) {
+                const error = err as { message?: string; statusCode?: number };
+                expect(error.message).toBe(
+                    'Refresh token secret is not configured',
+                );
                 expect(error.statusCode).toBe(500);
             }
         });
@@ -297,6 +363,47 @@ describe('UserService', () => {
                 expect(error.message).toBe('user not found');
                 expect(error.statusCode).toBe(404);
             }
+        });
+    });
+
+    describe('refresh', () => {
+        it('issues new tokens for a valid refresh token', async () => {
+            const user = {
+                id: 'user-1',
+                email: 'jane@example.com',
+                password: 'hashed',
+            };
+
+            const { service } = buildService({
+                userRepository: {
+                    findByEmail: jest.fn().mockResolvedValue(user),
+                    findById: jest.fn().mockResolvedValue(user),
+                } as unknown as UserRepository,
+                passwordManager: {
+                    compare: jest.fn().mockResolvedValue(true),
+                    toHash: jest.fn(),
+                } as unknown as PasswordManagerService,
+            });
+
+            const loginResult = await service.authenticate({
+                email: 'jane@example.com',
+                password: 'Password1',
+            });
+
+            const refreshed = await service.refresh({
+                refreshToken: loginResult.refreshToken,
+            });
+
+            expect(refreshed.token).toBeTruthy();
+            expect(refreshed.refreshToken).toBeTruthy();
+        });
+
+        it('rejects invalid refresh token', async () => {
+            const { service } = buildService();
+
+            await expect(
+                service.refresh({ refreshToken: 'invalid-token' }),
+            ).rejects.toThrow('invalid token');
         });
     });
 

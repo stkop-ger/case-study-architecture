@@ -9,7 +9,12 @@ import {
     PasswordManagerService,
     PasswordManagerServiceImpl,
 } from './src/services';
-import { UserRepository, UserRepositoryImpl } from './src/repositories';
+import {
+    UserRepository,
+    UserRepositoryImpl,
+    RefreshTokenRepository,
+    RedisRefreshTokenRepository,
+} from './src/repositories';
 
 import { TYPES } from './src/lib';
 
@@ -23,3 +28,7 @@ diContainer
 
 // bind repositories
 diContainer.bind<UserRepository>(TYPES.UserRepository).to(UserRepositoryImpl);
+diContainer
+    .bind<RefreshTokenRepository>(TYPES.RefreshTokenRepository)
+    .to(RedisRefreshTokenRepository)
+    .inSingletonScope();

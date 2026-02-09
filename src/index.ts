@@ -7,6 +7,7 @@ import { InversifyExpressServer } from 'inversify-express-utils';
 // import { createKafkaClient, Producer, Consumer } from '@marta/eventbus/dist';
 
 import { getDataSource } from './repositories/typeormconfig';
+import { createClient } from 'redis';
 
 import { diContainer } from '../inversify.config';
 import { TYPES } from './lib';
@@ -33,6 +34,16 @@ dotenv.config();
         const dataSource = await getDataSource();
         await dataSource.initialize();
         diContainer.bind(TYPES.DB).toConstantValue(dataSource);
+
+        const redisUrl =
+            process.env.REDIS_URL ??
+            `redis://${process.env.REDIS_HOST ?? 'localhost'}:${process.env.REDIS_PORT ?? '6379'}`;
+        const redisClient = createClient({ url: redisUrl });
+        redisClient.on('error', err => {
+            console.error('Redis client error', err);
+        });
+        await redisClient.connect();
+        diContainer.bind(TYPES.RedisClient).toConstantValue(redisClient);
 
         // Create app server
         const app = new InversifyExpressServer(diContainer, null, {

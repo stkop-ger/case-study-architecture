@@ -14,6 +14,9 @@ import {
     PasswordManagerServiceImpl,
 } from '../../services/password-manager-service';
 import { UserRepositoryImpl } from '../../repositories/user-repository';
+import {
+    InMemoryRefreshTokenRepository,
+} from '../../repositories/refresh-token-repository';
 import { User } from '../../entities';
 
 dotenv.config();
@@ -55,6 +58,8 @@ const buildTestDataSource = async (): Promise<DataSource> => {
 describe('UserController end-to-end', () => {
     const originalJwtSecret = process.env.JWT_SECRET;
     const originalJwtExpires = process.env.JWT_EXPIRES_IN;
+    const originalJwtRefreshSecret = process.env.JWT_REFRESH_SECRET;
+    const originalJwtRefreshExpires = process.env.JWT_REFRESH_EXPIRES_IN;
 
     let dataSource: DataSource;
     let app: ReturnType<InversifyExpressServer['build']>;
@@ -69,6 +74,10 @@ describe('UserController end-to-end', () => {
             .bind(TYPES.PasswordManagerService)
             .to(PasswordManagerServiceImpl);
         container.bind(TYPES.UserService).to(UserServiceImpl);
+        container
+            .bind(TYPES.RefreshTokenRepository)
+            .to(InMemoryRefreshTokenRepository)
+            .inSingletonScope();
 
         const server = new InversifyExpressServer(container, null, {
             rootPath: '/partner-app/api',
@@ -83,6 +92,8 @@ describe('UserController end-to-end', () => {
     beforeEach(() => {
         process.env.JWT_SECRET = 'test-secret';
         process.env.JWT_EXPIRES_IN = '15m';
+        process.env.JWT_REFRESH_SECRET = 'refresh-secret';
+        process.env.JWT_REFRESH_EXPIRES_IN = '7d';
     });
 
     afterEach(async () => {
@@ -91,6 +102,8 @@ describe('UserController end-to-end', () => {
         }
         process.env.JWT_SECRET = originalJwtSecret;
         process.env.JWT_EXPIRES_IN = originalJwtExpires;
+        process.env.JWT_REFRESH_SECRET = originalJwtRefreshSecret;
+        process.env.JWT_REFRESH_EXPIRES_IN = originalJwtRefreshExpires;
     });
 
     afterAll(async () => {
@@ -127,7 +140,7 @@ describe('UserController end-to-end', () => {
             .send({ email, password })
             .expect(200);
 
-        return response.body.token as string;
+        return response.body as { token: string; refreshToken: string };
     };
 
     describe('POST /users/register', () => {
@@ -175,14 +188,15 @@ describe('UserController end-to-end', () => {
         it('returns a valid JWT token', async () => {
             await registerUser();
 
-            const token = await loginUser('jane@example.com', 'Password1');
-            const decoded = jwt.verify(token, 'test-secret') as {
+            const tokens = await loginUser('jane@example.com', 'Password1');
+            const decoded = jwt.verify(tokens.token, 'test-secret') as {
                 sub?: string;
                 email?: string;
             };
 
             expect(decoded.sub).toBeTruthy();
             expect(decoded.email).toBe('jane@example.com');
+            expect(tokens.refreshToken).toBeTruthy();
         });
 
         it('rejects invalid credentials', async () => {
@@ -203,11 +217,11 @@ describe('UserController end-to-end', () => {
     describe('GET /users/profile', () => {
         it('returns the profile for authenticated users', async () => {
             const { response } = await registerUser();
-            const token = await loginUser('jane@example.com', 'Password1');
+            const tokens = await loginUser('jane@example.com', 'Password1');
 
             const profileResponse = await request(app)
                 .get('/partner-app/api/users/profile')
-                .set('Authorization', `Bearer ${token}`)
+                .set('Authorization', `Bearer ${tokens.token}`)
                 .expect(200);
 
             expect(profileResponse.body).toEqual({
@@ -232,11 +246,11 @@ describe('UserController end-to-end', () => {
     describe('PUT /users/profile', () => {
         it('updates profile details for authenticated users', async () => {
             const { response } = await registerUser();
-            const token = await loginUser('jane@example.com', 'Password1');
+            const tokens = await loginUser('jane@example.com', 'Password1');
 
             const updateResponse = await request(app)
                 .put('/partner-app/api/users/profile')
-                .set('Authorization', `Bearer ${token}`)
+                .set('Authorization', `Bearer ${tokens.token}`)
                 .send({ firstName: 'Janet', lastName: 'Doe' })
                 .expect(200);
 
@@ -264,6 +278,27 @@ describe('UserController end-to-end', () => {
                 .expect(401);
 
             expect(response.body).toEqual({ error: 'invalid token' });
+        });
+    });
+
+    describe('POST /users/refresh', () => {
+        it('returns new tokens for a valid refresh token', async () => {
+            await registerUser();
+            const tokens = await loginUser('jane@example.com', 'Password1');
+
+            const response = await request(app)
+                .post('/partner-app/api/users/refresh')
+                .send({ refreshToken: tokens.refreshToken })
+                .expect(200);
+
+            const decoded = jwt.verify(response.body.token, 'test-secret') as {
+                sub?: string;
+                email?: string;
+            };
+
+            expect(decoded.sub).toBeTruthy();
+            expect(decoded.email).toBe('jane@example.com');
+            expect(response.body.refreshToken).toBeTruthy();
         });
     });
 });

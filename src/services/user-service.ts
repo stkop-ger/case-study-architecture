@@ -3,8 +3,12 @@ import { injectable, inject } from 'inversify';
 import { User } from '../entities';
 import { TYPES } from '../lib';
 import { UserRepository } from '../repositories/user-repository';
+import {
+    RefreshTokenRepository,
+} from '../repositories/refresh-token-repository';
 import { PasswordManagerService } from './password-manager-service';
 import jwt, { SignOptions } from 'jsonwebtoken';
+import { randomUUID } from 'crypto';
 
 export interface RegisterUserInput {
     email: string;
@@ -20,6 +24,7 @@ export interface LoginUserInput {
 
 export interface LoginResult {
     token: string;
+    refreshToken: string;
 }
 
 export interface UpdateProfileDto {
@@ -27,9 +32,14 @@ export interface UpdateProfileDto {
     lastName?: string;
 }
 
+export interface RefreshTokenInput {
+    refreshToken: string;
+}
+
 export interface UserService {
     register(input: RegisterUserInput): Promise<User>;
     authenticate(input: LoginUserInput): Promise<LoginResult>;
+    refresh(input: RefreshTokenInput): Promise<LoginResult>;
     getProfile(userId: string): Promise<User>;
     updateProfile(userId: string, data: UpdateProfileDto): Promise<User>;
 }
@@ -95,6 +105,8 @@ export class UserServiceImpl implements UserService {
         @inject(TYPES.UserRepository) private userRepository: UserRepository,
         @inject(TYPES.PasswordManagerService)
         private passwordManager: PasswordManagerService,
+        @inject(TYPES.RefreshTokenRepository)
+        private refreshTokenRepository: RefreshTokenRepository,
     ) {}
 
     private buildJwt(user: User): string {
@@ -111,6 +123,33 @@ export class UserServiceImpl implements UserService {
             secret,
             { expiresIn },
         );
+    }
+
+    private buildRefreshToken(user: User): {
+        token: string;
+        tokenId: string;
+        ttlSeconds: number;
+    } {
+        const secret = process.env.JWT_REFRESH_SECRET;
+        if (!secret) {
+            throw new AuthError('Refresh token secret is not configured', 500);
+        }
+        const expiresIn =
+            (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
+        const tokenId = randomUUID();
+        const token = jwt.sign(
+            {
+                sub: user.id,
+                email: user.email,
+                type: 'refresh',
+                jti: tokenId,
+            },
+            secret,
+            { expiresIn },
+        );
+
+        const ttlSeconds = parseDurationToSeconds(expiresIn);
+        return { token, tokenId, ttlSeconds };
     }
 
     async register(input: RegisterUserInput): Promise<User> {
@@ -183,7 +222,67 @@ export class UserServiceImpl implements UserService {
             throw new AuthError('invalid credentials', 401);
         }
 
-        return { token: this.buildJwt(user) };
+        const accessToken = this.buildJwt(user);
+        const refreshToken = this.buildRefreshToken(user);
+        await this.refreshTokenRepository.store(
+            refreshToken.tokenId,
+            user.id,
+            refreshToken.ttlSeconds,
+        );
+
+        return { token: accessToken, refreshToken: refreshToken.token };
+    }
+
+    async refresh(input: RefreshTokenInput): Promise<LoginResult> {
+        const refreshToken = input.refreshToken ?? '';
+        ensureRequired(refreshToken, 'refreshToken');
+
+        const secret = process.env.JWT_REFRESH_SECRET;
+        if (!secret) {
+            throw new AuthError('Refresh token secret is not configured', 500);
+        }
+
+        let decoded: {
+            sub?: string;
+            email?: string;
+            jti?: string;
+            type?: string;
+        };
+
+        try {
+            decoded = jwt.verify(refreshToken, secret) as typeof decoded;
+        } catch (error) {
+            throw new AuthError('invalid token', 401);
+        }
+
+        if (!decoded?.sub || !decoded?.jti || decoded.type !== 'refresh') {
+            throw new AuthError('invalid token', 401);
+        }
+
+        const storedUserId = await this.refreshTokenRepository.get(decoded.jti);
+        if (!storedUserId || storedUserId !== decoded.sub) {
+            throw new AuthError('invalid token', 401);
+        }
+
+        const user = await this.userRepository.findById(decoded.sub);
+        if (!user) {
+            throw new AuthError('invalid token', 401);
+        }
+
+        await this.refreshTokenRepository.revoke(decoded.jti);
+
+        const accessToken = this.buildJwt(user);
+        const nextRefreshToken = this.buildRefreshToken(user);
+        await this.refreshTokenRepository.store(
+            nextRefreshToken.tokenId,
+            user.id,
+            nextRefreshToken.ttlSeconds,
+        );
+
+        return {
+            token: accessToken,
+            refreshToken: nextRefreshToken.token,
+        };
     }
 
     async getProfile(userId: string): Promise<User> {
@@ -229,3 +328,41 @@ export class UserServiceImpl implements UserService {
         return updated;
     }
 }
+
+const parseDurationToSeconds = (
+    value: SignOptions['expiresIn'],
+): number => {
+    if (typeof value === 'number') {
+        return Math.max(0, Math.floor(value));
+    }
+    if (typeof value !== 'string') {
+        throw new Error('refresh token ttl is invalid');
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+        throw new Error('refresh token ttl is invalid');
+    }
+
+    const numericValue = Number(trimmed);
+    if (Number.isFinite(numericValue)) {
+        return Math.max(0, Math.floor(numericValue));
+    }
+
+    const match = trimmed.match(/^(\d+)\s*([smhd])$/i);
+    if (!match) {
+        throw new Error('refresh token ttl is invalid');
+    }
+
+    const amount = Number(match[1]);
+    const unit = match[2].toLowerCase();
+
+    const multipliers: Record<string, number> = {
+        s: 1,
+        m: 60,
+        h: 3600,
+        d: 86400,
+    };
+
+    return amount * multipliers[unit];
+};

@@ -48,6 +48,17 @@ export class UserController extends BaseController {
         }
     }
 
+    @httpPost('/refresh')
+    async refresh(@request() req: Request, @response() res: Response) {
+        try {
+            const result = await this.userService.refresh(req.body);
+            return res.status(200).json(result);
+        } catch (error: any) {
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
+        }
+    }
+
     @httpGet('/profile', requireAuth)
     async getProfile(@request() req: Request, @response() res: Response) {
         try {
