@@ -3,6 +3,7 @@ import { inject } from 'inversify';
 import {
     controller,
     httpGet,
+    httpPatch,
     httpPost,
     request,
     response,
@@ -56,6 +57,29 @@ export class UserController extends BaseController {
             }
 
             const user = await this.userService.getProfile(userId);
+            return res.status(200).json({
+                id: user.id,
+                email: user.email,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                createdAt: user.createdAt,
+                updatedAt: user.updatedAt,
+            });
+        } catch (error: any) {
+            const statusCode = error?.statusCode ?? 400;
+            return res.status(statusCode).json({ error: error.message });
+        }
+    }
+
+    @httpPatch('/profile', requireAuth)
+    async updateProfile(@request() req: Request, @response() res: Response) {
+        try {
+            const userId = req.user?.id;
+            if (!userId) {
+                return res.status(401).json({ error: 'invalid token' });
+            }
+
+            const user = await this.userService.updateProfile(userId, req.body);
             return res.status(200).json({
                 id: user.id,
                 email: user.email,

@@ -110,4 +110,30 @@ describe('UserRepository integration', () => {
         expect(found).not.toBeNull();
         expect(found?.id).toBe(saved.id);
     });
+
+    it('updates a user profile and persists changes', async () => {
+        const saved = await repository.create({
+            email: 'mark@example.com',
+            password: 'salt.hash',
+            firstName: 'Mark',
+            lastName: 'Twain',
+        });
+
+        const updated = await repository.updateProfile(saved.id, {
+            firstName: 'Marcus',
+            lastName: 'Twain',
+        });
+
+        expect(updated).not.toBeNull();
+        expect(updated?.id).toBe(saved.id);
+        expect(updated?.firstName).toBe('Marcus');
+        expect(updated?.lastName).toBe('Twain');
+
+        const persisted = await dataSource
+            .getRepository(User)
+            .findOne({ where: { id: saved.id } });
+
+        expect(persisted?.firstName).toBe('Marcus');
+        expect(persisted?.lastName).toBe('Twain');
+    });
 });

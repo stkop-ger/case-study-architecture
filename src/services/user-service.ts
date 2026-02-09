@@ -22,10 +22,16 @@ export interface LoginResult {
     token: string;
 }
 
+export interface UpdateProfileDto {
+    firstName?: string;
+    lastName?: string;
+}
+
 export interface UserService {
     register(input: RegisterUserInput): Promise<User>;
     authenticate(input: LoginUserInput): Promise<LoginResult>;
     getProfile(userId: string): Promise<User>;
+    updateProfile(userId: string, data: UpdateProfileDto): Promise<User>;
 }
 
 const MAX_LENGTH = 50;
@@ -189,5 +195,37 @@ export class UserServiceImpl implements UserService {
         }
 
         return user;
+    }
+
+    async updateProfile(userId: string, data: UpdateProfileDto): Promise<User> {
+        ensureRequired(userId, 'userId');
+
+        const firstName = data?.firstName?.trim();
+        const lastName = data?.lastName?.trim();
+
+        if (!firstName && !lastName) {
+            throw new Error('firstName or lastName is required');
+        }
+
+        if (firstName !== undefined) {
+            ensureRequired(firstName, 'firstName');
+            ensureLengthLimit(firstName, 'firstName');
+        }
+
+        if (lastName !== undefined) {
+            ensureRequired(lastName, 'lastName');
+            ensureLengthLimit(lastName, 'lastName');
+        }
+
+        const updated = await this.userRepository.updateProfile(userId, {
+            firstName,
+            lastName,
+        });
+
+        if (!updated) {
+            throw new NotFoundError('user not found');
+        }
+
+        return updated;
     }
 }

@@ -24,6 +24,7 @@ const buildApp = (overrides?: {
             findByEmail: jest.fn().mockResolvedValue(null),
             findById: jest.fn().mockResolvedValue(null),
             create: jest.fn(),
+            updateProfile: jest.fn(),
         } as unknown as UserRepository);
 
     const passwordManager: PasswordManagerService =
@@ -493,5 +494,122 @@ describe('GET /partner-app/api/users/profile', () => {
 
         expect(response.status).toBe(404);
         expect(response.body).toEqual({ error: 'user not found' });
+    });
+});
+
+describe('PATCH /partner-app/api/users/profile', () => {
+    beforeEach(() => {
+        process.env.JWT_SECRET = 'test-secret';
+        process.env.JWT_EXPIRES_IN = '1h';
+    });
+
+    it('updates the authenticated user profile', async () => {
+        const updatedUser = {
+            id: 'user-1',
+            email: 'jane@example.com',
+            password: 'salt.hash',
+            firstName: 'Jane',
+            lastName: 'Smith',
+            createdAt: new Date('2026-02-08T10:00:00Z'),
+            updatedAt: new Date('2026-02-09T10:00:00Z'),
+        };
+
+        const { app, userRepository } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn(),
+                findById: jest.fn(),
+                create: jest.fn(),
+                updateProfile: jest.fn().mockResolvedValue(updatedUser),
+            } as unknown as UserRepository,
+        });
+
+        const token = jwt.sign(
+            { sub: 'user-1', email: 'jane@example.com' },
+            'test-secret',
+            { expiresIn: '1h' },
+        );
+
+        const response = await request(app)
+            .patch('/partner-app/api/users/profile')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ firstName: '  Jane  ', lastName: '  Smith  ' });
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            id: 'user-1',
+            email: 'jane@example.com',
+            firstName: 'Jane',
+            lastName: 'Smith',
+            createdAt: updatedUser.createdAt.toISOString(),
+            updatedAt: updatedUser.updatedAt.toISOString(),
+        });
+        expect(userRepository.updateProfile).toHaveBeenCalledWith('user-1', {
+            firstName: 'Jane',
+            lastName: 'Smith',
+        });
+    });
+
+    it('rejects missing token', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .patch('/partner-app/api/users/profile')
+            .send({ firstName: 'Jane' });
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ error: 'invalid token' });
+    });
+
+    it('rejects invalid token', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .patch('/partner-app/api/users/profile')
+            .set('Authorization', 'Bearer not-a-valid-token')
+            .send({ firstName: 'Jane' });
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ error: 'invalid token' });
+    });
+
+    it('returns 404 when user is not found', async () => {
+        const { app } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn(),
+                findById: jest.fn(),
+                create: jest.fn(),
+                updateProfile: jest.fn().mockResolvedValue(null),
+            } as unknown as UserRepository,
+        });
+
+        const token = jwt.sign({ sub: 'missing-user' }, 'test-secret', {
+            expiresIn: '1h',
+        });
+
+        const response = await request(app)
+            .patch('/partner-app/api/users/profile')
+            .set('Authorization', `Bearer ${token}`)
+            .send({ firstName: 'Jane' });
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: 'user not found' });
+    });
+
+    it('rejects missing names', async () => {
+        const { app } = buildApp();
+
+        const token = jwt.sign({ sub: 'user-1' }, 'test-secret', {
+            expiresIn: '1h',
+        });
+
+        const response = await request(app)
+            .patch('/partner-app/api/users/profile')
+            .set('Authorization', `Bearer ${token}`)
+            .send({});
+
+        expect(response.status).toBe(400);
+        expect(response.body).toEqual({
+            error: 'firstName or lastName is required',
+        });
     });
 });
