@@ -7,9 +7,19 @@ import {
     RefreshTokenRepository,
 } from '../repositories/refresh-token-repository';
 import { PasswordManagerService } from './password-manager-service';
-import jwt, { SignOptions } from 'jsonwebtoken';
-import { randomUUID } from 'crypto';
+import jwt from 'jsonwebtoken';
 import type { RedisClientType } from 'redis';
+
+import { AuthError, NotFoundError } from './user/errors';
+import { LoginRateLimiter } from './user/login-rate-limiter';
+import { buildJwt, buildRefreshToken } from './user/token-utils';
+import {
+    ensureLengthLimit,
+    ensureRequired,
+    isStrongPassword,
+    isValidEmail,
+    PASSWORD_HASH_MAX_LENGTH,
+} from './user/validation';
 
 export interface RegisterUserInput {
     email: string;
@@ -56,66 +66,10 @@ export interface UserService {
     updateProfile(userId: string, data: UpdateProfileDto): Promise<User>;
 }
 
-const MAX_LENGTH = 50;
-const PASSWORD_HASH_MAX_LENGTH = 255;
-const DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS = 5;
-const DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 15 * 60;
-const LOGIN_RATE_LIMIT_KEY_PREFIX = 'login:attempts:';
-
-const isValidEmail = (email: string) => {
-    const trimmed = email.trim();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(trimmed);
-};
-
-const isStrongPassword = (password: string) => {
-    if (password.length < 8) {
-        return false;
-    }
-    if (!/[A-Z]/.test(password)) {
-        return false;
-    }
-    if (!/[a-z]/.test(password)) {
-        return false;
-    }
-    if (!/[0-9]/.test(password)) {
-        return false;
-    }
-    return true;
-};
-
-const ensureRequired = (value: string, field: string) => {
-    if (!value || value.trim().length === 0) {
-        throw new Error(`${field} is required`);
-    }
-};
-
-const ensureLengthLimit = (value: string, field: string, maxLength = MAX_LENGTH) => {
-    if (value.length > maxLength) {
-        throw new Error(`${field} must be ${maxLength} characters or fewer`);
-    }
-};
-
-class AuthError extends Error {
-    readonly statusCode: number;
-
-    constructor(message: string, statusCode: number) {
-        super(message);
-        this.statusCode = statusCode;
-    }
-}
-
-class NotFoundError extends Error {
-    readonly statusCode: number;
-
-    constructor(message: string) {
-        super(message);
-        this.statusCode = 404;
-    }
-}
-
 @injectable()
 export class UserServiceImpl implements UserService {
+    private loginRateLimiter: LoginRateLimiter;
+
     constructor(
         @inject(TYPES.UserRepository) private userRepository: UserRepository,
         @inject(TYPES.PasswordManagerService)
@@ -123,49 +77,8 @@ export class UserServiceImpl implements UserService {
         @inject(TYPES.RefreshTokenRepository)
         private refreshTokenRepository: RefreshTokenRepository,
         @inject(TYPES.RedisClient) private redis: RedisClientType,
-    ) {}
-
-    private buildJwt(user: User): string {
-        const secret = process.env.JWT_SECRET;
-        if (!secret) {
-            throw new AuthError('JWT secret is not configured', 500);
-        }
-        const expiresIn = (process.env.JWT_EXPIRES_IN || '24h') as SignOptions['expiresIn'];
-        return jwt.sign(
-            {
-                sub: user.id,
-                email: user.email,
-            },
-            secret,
-            { expiresIn },
-        );
-    }
-
-    private buildRefreshToken(user: User): {
-        token: string;
-        tokenId: string;
-        ttlSeconds: number;
-    } {
-        const secret = process.env.JWT_REFRESH_SECRET;
-        if (!secret) {
-            throw new AuthError('Refresh token secret is not configured', 500);
-        }
-        const expiresIn =
-            (process.env.JWT_REFRESH_EXPIRES_IN || '7d') as SignOptions['expiresIn'];
-        const tokenId = randomUUID();
-        const token = jwt.sign(
-            {
-                sub: user.id,
-                email: user.email,
-                type: 'refresh',
-                jti: tokenId,
-            },
-            secret,
-            { expiresIn },
-        );
-
-        const ttlSeconds = parseDurationToSeconds(expiresIn);
-        return { token, tokenId, ttlSeconds };
+    ) {
+        this.loginRateLimiter = new LoginRateLimiter(this.redis);
     }
 
     async register(input: RegisterUserInput): Promise<User> {
@@ -225,11 +138,11 @@ export class UserServiceImpl implements UserService {
             throw new Error('email is invalid');
         }
 
-        await this.assertLoginAttemptAllowed(email);
+        await this.loginRateLimiter.assertAllowed(email);
 
         const user = await this.userRepository.findByEmail(email);
         if (!user) {
-            await this.recordFailedLoginAttempt(email);
+            await this.loginRateLimiter.recordFailedAttempt(email);
             throw new AuthError('invalid credentials', 401);
         }
 
@@ -238,14 +151,14 @@ export class UserServiceImpl implements UserService {
             password,
         );
         if (!isMatch) {
-            await this.recordFailedLoginAttempt(email);
+            await this.loginRateLimiter.recordFailedAttempt(email);
             throw new AuthError('invalid credentials', 401);
         }
 
-        await this.clearLoginAttempts(email);
+        await this.loginRateLimiter.clear(email);
 
-        const accessToken = this.buildJwt(user);
-        const refreshToken = this.buildRefreshToken(user);
+        const accessToken = buildJwt(user);
+        const refreshToken = buildRefreshToken(user);
         await this.refreshTokenRepository.store(
             refreshToken.tokenId,
             user.id,
@@ -293,8 +206,8 @@ export class UserServiceImpl implements UserService {
 
         await this.refreshTokenRepository.revoke(decoded.jti);
 
-        const accessToken = this.buildJwt(user);
-        const nextRefreshToken = this.buildRefreshToken(user);
+        const accessToken = buildJwt(user);
+        const nextRefreshToken = buildRefreshToken(user);
         await this.refreshTokenRepository.store(
             nextRefreshToken.tokenId,
             user.id,
@@ -382,120 +295,4 @@ export class UserServiceImpl implements UserService {
 
         return updated;
     }
-
-    private getLoginRateLimitConfig(): {
-        maxAttempts: number;
-        windowSeconds: number;
-    } {
-        const maxAttempts = Number(
-            process.env.LOGIN_RATE_LIMIT_MAX_ATTEMPTS ??
-                DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
-        );
-        const windowSeconds = Number(
-            process.env.LOGIN_RATE_LIMIT_WINDOW_SECONDS ??
-                DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        );
-
-        return {
-            maxAttempts: Number.isFinite(maxAttempts)
-                ? maxAttempts
-                : DEFAULT_LOGIN_RATE_LIMIT_MAX_ATTEMPTS,
-            windowSeconds: Number.isFinite(windowSeconds)
-                ? windowSeconds
-                : DEFAULT_LOGIN_RATE_LIMIT_WINDOW_SECONDS,
-        };
-    }
-
-    private buildLoginRateLimitKey(email: string): string {
-        return `${LOGIN_RATE_LIMIT_KEY_PREFIX}${email.toLowerCase()}`;
-    }
-
-    private async assertLoginAttemptAllowed(email: string): Promise<void> {
-        const { maxAttempts } = this.getLoginRateLimitConfig();
-        if (maxAttempts <= 0) {
-            return;
-        }
-
-        const key = this.buildLoginRateLimitKey(email);
-        try {
-            const current = await this.redis.get(key);
-            const attempts = current ? Number(current) : 0;
-            if (Number.isFinite(attempts) && attempts >= maxAttempts) {
-                throw new AuthError('too many login attempts', 429);
-            }
-        } catch (error) {
-            if (error instanceof AuthError) {
-                throw error;
-            }
-        }
-    }
-
-    private async recordFailedLoginAttempt(email: string): Promise<void> {
-        const { maxAttempts, windowSeconds } = this.getLoginRateLimitConfig();
-        if (maxAttempts <= 0 || windowSeconds <= 0) {
-            return;
-        }
-
-        const key = this.buildLoginRateLimitKey(email);
-        try {
-            const attempts = await this.redis.incr(key);
-            if (attempts === 1) {
-                await this.redis.expire(key, windowSeconds);
-            }
-            if (attempts >= maxAttempts) {
-                throw new AuthError('too many login attempts', 429);
-            }
-        } catch (error) {
-            if (error instanceof AuthError) {
-                throw error;
-            }
-        }
-    }
-
-    private async clearLoginAttempts(email: string): Promise<void> {
-        const key = this.buildLoginRateLimitKey(email);
-        try {
-            await this.redis.del(key);
-        } catch {
-            // Best effort: do not block login on Redis errors.
-        }
-    }
 }
-
-const parseDurationToSeconds = (
-    value: SignOptions['expiresIn'],
-): number => {
-    if (typeof value === 'number') {
-        return Math.max(0, Math.floor(value));
-    }
-    if (typeof value !== 'string') {
-        throw new Error('refresh token ttl is invalid');
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-        throw new Error('refresh token ttl is invalid');
-    }
-
-    const numericValue = Number(trimmed);
-    if (Number.isFinite(numericValue)) {
-        return Math.max(0, Math.floor(numericValue));
-    }
-
-    const match = trimmed.match(/^(\d+)\s*([smhd])$/i);
-    if (!match) {
-        throw new Error('refresh token ttl is invalid');
-    }
-
-    const amount = Number(match[1]);
-    const unit = match[2].toLowerCase();
-
-    const multipliers: Record<string, number> = {
-        s: 1,
-        m: 60,
-        h: 3600,
-        d: 86400,
-    };
-
-    return amount * multipliers[unit];
-};
