@@ -22,6 +22,7 @@ const buildApp = (overrides?: {
         overrides?.userRepository ??
         ({
             findByEmail: jest.fn().mockResolvedValue(null),
+            findById: jest.fn().mockResolvedValue(null),
             create: jest.fn(),
         } as unknown as UserRepository);
 
@@ -402,5 +403,95 @@ describe('POST /partner-app/api/users/login', () => {
 
         expect(response.status).toBe(400);
         expect(response.body).toEqual({ error: 'password is required' });
+    });
+});
+
+describe('GET /partner-app/api/users/profile', () => {
+    beforeEach(() => {
+        process.env.JWT_SECRET = 'test-secret';
+        process.env.JWT_EXPIRES_IN = '1h';
+    });
+
+    it('returns the authenticated user profile', async () => {
+        const existingUser = {
+            id: 'user-1',
+            email: 'jane@example.com',
+            password: 'salt.hash',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            createdAt: new Date('2026-02-08T10:00:00Z'),
+            updatedAt: new Date('2026-02-08T10:00:00Z'),
+        };
+
+        const { app, userRepository } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn(),
+                findById: jest.fn().mockResolvedValue(existingUser),
+                create: jest.fn(),
+            } as unknown as UserRepository,
+        });
+
+        const token = jwt.sign(
+            { sub: 'user-1', email: 'jane@example.com' },
+            'test-secret',
+            { expiresIn: '1h' },
+        );
+
+        const response = await request(app)
+            .get('/partner-app/api/users/profile')
+            .set('Authorization', `Bearer ${token}`);
+
+        expect(response.status).toBe(200);
+        expect(response.body).toEqual({
+            id: 'user-1',
+            email: 'jane@example.com',
+            firstName: 'Jane',
+            lastName: 'Doe',
+            createdAt: existingUser.createdAt.toISOString(),
+            updatedAt: existingUser.updatedAt.toISOString(),
+        });
+        expect(userRepository.findById).toHaveBeenCalledWith('user-1');
+    });
+
+    it('rejects missing token', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .get('/partner-app/api/users/profile');
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ error: 'invalid token' });
+    });
+
+    it('rejects invalid token', async () => {
+        const { app } = buildApp();
+
+        const response = await request(app)
+            .get('/partner-app/api/users/profile')
+            .set('Authorization', 'Bearer not-a-valid-token');
+
+        expect(response.status).toBe(401);
+        expect(response.body).toEqual({ error: 'invalid token' });
+    });
+
+    it('returns 404 when user is not found', async () => {
+        const { app } = buildApp({
+            userRepository: {
+                findByEmail: jest.fn(),
+                findById: jest.fn().mockResolvedValue(null),
+                create: jest.fn(),
+            } as unknown as UserRepository,
+        });
+
+        const token = jwt.sign({ sub: 'missing-user' }, 'test-secret', {
+            expiresIn: '1h',
+        });
+
+        const response = await request(app)
+            .get('/partner-app/api/users/profile')
+            .set('Authorization', `Bearer ${token}`);
+
+        expect(response.status).toBe(404);
+        expect(response.body).toEqual({ error: 'user not found' });
     });
 });

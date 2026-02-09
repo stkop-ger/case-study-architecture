@@ -25,6 +25,7 @@ export interface LoginResult {
 export interface UserService {
     register(input: RegisterUserInput): Promise<User>;
     authenticate(input: LoginUserInput): Promise<LoginResult>;
+    getProfile(userId: string): Promise<User>;
 }
 
 const MAX_LENGTH = 50;
@@ -70,6 +71,15 @@ class AuthError extends Error {
     constructor(message: string, statusCode: number) {
         super(message);
         this.statusCode = statusCode;
+    }
+}
+
+class NotFoundError extends Error {
+    readonly statusCode: number;
+
+    constructor(message: string) {
+        super(message);
+        this.statusCode = 404;
     }
 }
 
@@ -168,5 +178,16 @@ export class UserServiceImpl implements UserService {
         }
 
         return { token: this.buildJwt(user) };
+    }
+
+    async getProfile(userId: string): Promise<User> {
+        ensureRequired(userId, 'userId');
+
+        const user = await this.userRepository.findById(userId);
+        if (!user) {
+            throw new NotFoundError('user not found');
+        }
+
+        return user;
     }
 }
