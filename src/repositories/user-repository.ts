@@ -27,7 +27,8 @@ export class UserRepositoryImpl implements UserRepository {
 
     async findByEmail(email: string): Promise<User | null> {
         const repo = await this.getRepo();
-        return await repo.findOne({ where: { email } });
+        const normalizedEmail = email.trim().toLowerCase();
+        return await repo.findOne({ where: { email: normalizedEmail } });
     }
 
     async findById(id: string): Promise<User | null> {

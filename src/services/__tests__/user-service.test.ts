@@ -125,7 +125,7 @@ describe('UserService', () => {
             });
 
             const result = await service.register({
-                email: '  jane@example.com ',
+                email: '  Jane@Example.com ',
                 password: 'Password1',
                 firstName: '  Jane ',
                 lastName: ' Doe  ',

@@ -82,7 +82,7 @@ export class UserServiceImpl implements UserService {
     }
 
     async register(input: RegisterUserInput): Promise<User> {
-        const email = input.email?.trim();
+        const email = input.email?.trim().toLowerCase();
         const password = input.password ?? '';
         const firstName = input.firstName?.trim();
         const lastName = input.lastName?.trim();
@@ -128,7 +128,7 @@ export class UserServiceImpl implements UserService {
     }
 
     async authenticate(input: LoginUserInput): Promise<LoginResult> {
-        const email = input.email?.trim();
+        const email = input.email?.trim().toLowerCase();
         const password = input.password ?? '';
 
         ensureRequired(email, 'email');
@@ -221,7 +221,7 @@ export class UserServiceImpl implements UserService {
     }
 
     async requestPasswordReset(input: PasswordResetRequestInput): Promise<void> {
-        const email = input.email?.trim();
+        const email = input.email?.trim().toLowerCase();
         ensureRequired(email, 'email');
 
         if (!isValidEmail(email)) {

@@ -1,4 +1,4 @@
-import { scrypt, randomBytes } from 'crypto';
+import { scrypt, randomBytes, timingSafeEqual } from 'crypto';
 import { injectable } from 'inversify';
 import { promisify } from 'util';
 
@@ -26,7 +26,15 @@ export class PasswordManagerServiceImpl implements PasswordManagerService {
         if (!salt || !storedHash) {
             return false;
         }
-        const derivedKey = (await scryptAsync(suppliedPassword, salt, 64)) as Buffer;
-        return storedHash === derivedKey.toString('hex');
+        const derivedKey = (await scryptAsync(
+            suppliedPassword,
+            salt,
+            64,
+        )) as Buffer;
+        const storedBuffer = Buffer.from(storedHash, 'hex');
+        if (storedBuffer.length !== derivedKey.length) {
+            return false;
+        }
+        return timingSafeEqual(storedBuffer, derivedKey);
     }
 }
