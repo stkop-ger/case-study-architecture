@@ -3,8 +3,8 @@ import { inject } from 'inversify';
 import {
     controller,
     httpGet,
-    httpPatch,
     httpPost,
+    httpPut,
     request,
     response,
 } from 'inversify-express-utils';
@@ -71,7 +71,7 @@ export class UserController extends BaseController {
         }
     }
 
-    @httpPatch('/profile', requireAuth)
+    @httpPut('/profile', requireAuth)
     async updateProfile(@request() req: Request, @response() res: Response) {
         try {
             const userId = req.user?.id;

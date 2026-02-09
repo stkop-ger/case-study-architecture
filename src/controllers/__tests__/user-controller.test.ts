@@ -497,7 +497,7 @@ describe('GET /partner-app/api/users/profile', () => {
     });
 });
 
-describe('PATCH /partner-app/api/users/profile', () => {
+describe('PUT /partner-app/api/users/profile', () => {
     beforeEach(() => {
         process.env.JWT_SECRET = 'test-secret';
         process.env.JWT_EXPIRES_IN = '1h';
@@ -530,7 +530,7 @@ describe('PATCH /partner-app/api/users/profile', () => {
         );
 
         const response = await request(app)
-            .patch('/partner-app/api/users/profile')
+            .put('/partner-app/api/users/profile')
             .set('Authorization', `Bearer ${token}`)
             .send({ firstName: '  Jane  ', lastName: '  Smith  ' });
 
@@ -553,7 +553,7 @@ describe('PATCH /partner-app/api/users/profile', () => {
         const { app } = buildApp();
 
         const response = await request(app)
-            .patch('/partner-app/api/users/profile')
+            .put('/partner-app/api/users/profile')
             .send({ firstName: 'Jane' });
 
         expect(response.status).toBe(401);
@@ -564,7 +564,7 @@ describe('PATCH /partner-app/api/users/profile', () => {
         const { app } = buildApp();
 
         const response = await request(app)
-            .patch('/partner-app/api/users/profile')
+            .put('/partner-app/api/users/profile')
             .set('Authorization', 'Bearer not-a-valid-token')
             .send({ firstName: 'Jane' });
 
@@ -587,7 +587,7 @@ describe('PATCH /partner-app/api/users/profile', () => {
         });
 
         const response = await request(app)
-            .patch('/partner-app/api/users/profile')
+            .put('/partner-app/api/users/profile')
             .set('Authorization', `Bearer ${token}`)
             .send({ firstName: 'Jane' });
 
@@ -603,7 +603,7 @@ describe('PATCH /partner-app/api/users/profile', () => {
         });
 
         const response = await request(app)
-            .patch('/partner-app/api/users/profile')
+            .put('/partner-app/api/users/profile')
             .set('Authorization', `Bearer ${token}`)
             .send({});
 
